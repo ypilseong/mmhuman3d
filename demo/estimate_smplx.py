@@ -2,10 +2,13 @@ import os
 import os.path as osp
 import shutil
 from argparse import ArgumentParser
+import json
 
 import mmcv
 import numpy as np
 import torch
+from json import JSONEncoder
+
 
 from mmhuman3d.apis import (
     feature_extract,
@@ -13,6 +16,8 @@ from mmhuman3d.apis import (
     init_model,
 )
 from mmhuman3d.core.visualization.visualize_smpl import visualize_smpl_hmr
+from mmhuman3d.core.conventions.keypoints_mapping import convert_kps
+from mmhuman3d.models.body_models.builder import build_body_model
 from mmhuman3d.data.data_structures.human_data import HumanData
 from mmhuman3d.utils.demo_utils import (
     prepare_frames,
@@ -208,6 +213,10 @@ def single_person_with_mmdet(args, frames_iter):
         human_data['pred_cams'] = pred_cams
         human_data.dump(osp.join(args.output, 'inference_result.npz'))
 
+        
+
+        
+
     if args.show_path is not None:
         frames_folder = osp.join(args.show_path, 'images')
         os.makedirs(frames_folder, exist_ok=True)
@@ -335,8 +344,42 @@ def multi_person_with_mmtracking(args, frames_iter):
         smplx['betas'] = smplx_results['betas']
         human_data['smplx'] = smplx
         human_data['pred_cams'] = pred_cams
-        human_data.dump(osp.join(args.output, 'inference_result.npz'))
+        human_data.dump(osp.join(args.output, 'inference_resulti_smpl.npz'))
 
+        human_data_json= {}
+        human_data_json['fullpose'] = human_data['smplx']
+
+        body_model_dir = 'data/body_models/smplx'
+        body_model = \
+            build_body_model(
+                dict(
+                    type='SMPL',
+                    keypoint_src='smplx',
+                    keypoint_dst='smplx',
+                    gender='neutral',
+                    num_betas=10,
+                    use_pca=False,
+                    model_path=body_model_dir)
+        )
+        result = body_model(
+            fullpose=torch.tensor(smplx['fullpose'])
+        )
+        result_pose = {}
+        result_keypoints = result['joints'].detach().cpu().numpy()
+        result_pose['joints'] = np.array(result_keypoints)
+        
+        keypoints_3d, mask = convert_kps(result_pose['joints'], src='smplx', dst='openpose_25')
+        #assert mask.all()==1
+
+        class NumpyArrayEncoder(JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return JSONEncoder.default(self, obj)
+        
+        with open("test_multi_smplx_convert.json", "w") as write_file:
+           json.dump(keypoints_3d, write_file, cls=NumpyArrayEncoder)
+        print("finsh to writing")
     # To compress vertices array
     compressed_cams = np.zeros([frame_num, max_instance, 3])
     compressed_bboxs = np.zeros([frame_num, max_instance, 5])

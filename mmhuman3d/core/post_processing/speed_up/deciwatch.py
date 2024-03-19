@@ -59,15 +59,18 @@ class DeciWatchPostProcessing:
 
         if x.shape[1:] == (24, 3, 3):
             input_type = 'matrix'
-            x = torch.tensor(x).to(self.device)
+            #x = torch.tensor(x).to(self.device)
+            x = x.clone().detach().to(self.device)
             x = rotmat_to_rot6d(x).reshape(-1, self.input_dimension)
         elif x.shape[1:] == (24, 3):
             input_type = 'axis_angles'
-            x = torch.tensor(x).to(self.device)
+           # x = torch.tensor(x).to(self.device)
+            x = x.clone().detach().to(self.device)
             x = rotmat_to_rot6d(aa_to_rotmat(x.reshape(-1, 3))).reshape(
                 -1, self.input_dimension)
         else:
-            x = torch.tensor(x).to(self.device)
+            #x = torch.tensor(x).to(self.device)
+            x = x.clone().detach().to(self.device)
             x = x.reshape(-1, self.input_dimension)
             input_type = 'rotation_6d'
 

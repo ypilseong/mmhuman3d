@@ -93,7 +93,7 @@ class SMPL(_SMPL):
     def forward(self,
                 *args,
                 return_verts: bool = True,
-                return_full_pose: bool = False,
+                return_full_pose: bool = True,
                 **kwargs) -> dict:
         """Forward function.
 

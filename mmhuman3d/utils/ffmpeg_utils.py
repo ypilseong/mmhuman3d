@@ -675,7 +675,7 @@ def images_to_video(input_folder: str,
                                                Tuple[float, float]]] = None,
                     start: int = 0,
                     end: Optional[int] = None,
-                    disable_log: bool = False) -> None:
+                    disable_log: bool = True) -> None:
     """Convert a folder of images to a video.
 
     Args:

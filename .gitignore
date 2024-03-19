@@ -143,3 +143,9 @@ logs/
 *DS_Store*
 # git
 *.orig
+
+#json
+*.json
+
+#fbx
+*.fbx

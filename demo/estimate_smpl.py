@@ -5,9 +5,13 @@ import warnings
 from argparse import ArgumentParser
 from pathlib import Path
 
+
+
+import json
 import mmcv
 import numpy as np
 import torch
+from json import JSONEncoder
 
 from mmhuman3d.apis import (
     feature_extract,
@@ -16,6 +20,9 @@ from mmhuman3d.apis import (
     init_model,
 )
 from mmhuman3d.core.visualization.visualize_smpl import visualize_smpl_hmr
+from mmhuman3d.core.conventions.keypoints_mapping import convert_kps
+from mmhuman3d.models.body_models.builder import build_body_model
+from mmhuman3d.data.data_converters.humman import HuMManConverter
 from mmhuman3d.data.data_structures.human_data import HumanData
 from mmhuman3d.utils.demo_utils import (
     extract_feature_sequence,
@@ -242,16 +249,18 @@ def single_person_with_mmdet(args, frames_iter):
             np.array(frames_iter)[frame_id_list], output_folder=frames_folder)
 
         for i, img_i in enumerate(sorted(os.listdir(frames_folder))):
-            body_pose_.append(smpl_poses[i][1:])
-            global_orient_.append(smpl_poses[i][:1])
-            smpl_betas_.append(smpl_betas[i])
-            verts_.append(verts[i])
-            pred_cams_.append(pred_cams[i])
-            bboxes_xyxy_.append(bboxes_xyxy[i])
-            image_path_.append(os.path.join('images', img_i))
-            person_id_.append(0)
-            frame_id_.append(frame_id_list[i])
-
+            if i < 405 :
+                body_pose_.append(smpl_poses[i][1:])
+                global_orient_.append(smpl_poses[i][:1])
+                smpl_betas_.append(smpl_betas[i])
+                verts_.append(verts[i])
+                pred_cams_.append(pred_cams[i])
+                bboxes_xyxy_.append(bboxes_xyxy[i])
+                image_path_.append(os.path.join('images', img_i))
+                person_id_.append(0)
+                frame_id_.append(frame_id_list[i])
+            else :
+                continue
         smpl = {}
         smpl['body_pose'] = np.array(body_pose_).reshape((-1, 23, 3))
         smpl['global_orient'] = np.array(global_orient_).reshape((-1, 3))
@@ -263,8 +272,19 @@ def single_person_with_mmdet(args, frames_iter):
         human_data['image_path'] = image_path_
         human_data['person_id'] = person_id_
         human_data['frame_id'] = frame_id_
-        human_data.dump(osp.join(args.output, 'inference_result.npz'))
-
+        human_data.dump(osp.join(args.output, 'inference_result_single.npz'))
+        
+        
+        
+        class NumpyArrayEncoder(JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return JSONEncoder.default(self, obj)
+        
+        with open("numpyData.json", "w") as write_file:
+            json.dump(human_data, write_file, cls=NumpyArrayEncoder)
+       
     if args.show_path is not None:
         if args.output is not None:
             frames_folder = os.path.join(args.output, 'images')
@@ -407,8 +427,8 @@ def multi_person_with_mmtracking(args, frames_iter):
 
     if args.output is not None:
         body_pose_, global_orient_, smpl_betas_, verts_, pred_cams_, \
-            bboxes_xyxy_, image_path_, frame_id_, person_id_ = \
-            [], [], [], [], [], [], [], [], []
+            bboxes_xyxy_, image_path_, frame_id_, person_id_, full_pose_ = \
+            [], [], [], [], [], [], [], [], [], []
         human_data = HumanData()
         frames_folder = osp.join(args.output, 'images')
         os.makedirs(frames_folder, exist_ok=True)
@@ -416,30 +436,147 @@ def multi_person_with_mmtracking(args, frames_iter):
             np.array(frames_iter)[frame_id_list], output_folder=frames_folder)
 
         for i, img_i in enumerate(sorted(os.listdir(frames_folder))):
-            for person_i in track_ids_lists[i]:
-                body_pose_.append(smpl_poses[i][person_i][1:])
-                global_orient_.append(smpl_poses[i][person_i][:1])
-                smpl_betas_.append(smpl_betas[i][person_i])
-                verts_.append(verts[i][person_i])
-                pred_cams_.append(pred_cams[i][person_i])
-                bboxes_xyxy_.append(bboxes_xyxy[i][person_i])
-                image_path_.append(os.path.join('images', img_i))
-                person_id_.append(person_i)
-                frame_id_.append(frame_id_list[i])
+            if i < len(track_ids_lists):
+                for person_i in track_ids_lists[i]:
+            # 코드의 나머지 부분은 변경되지 않습니다
+                    body_pose_.append(smpl_poses[i][person_i][1:])
+                    global_orient_.append(smpl_poses[i][person_i][:1])
+                    smpl_betas_.append(smpl_betas[i][person_i])
+                    verts_.append(verts[i][person_i])
+                    pred_cams_.append(pred_cams[i][person_i])
+                    bboxes_xyxy_.append(bboxes_xyxy[i][person_i])
+                    image_path_.append(os.path.join('images', img_i))
+                    person_id_.append(person_i)
+                    frame_id_.append(frame_id_list[i])
+                    full_pose_.append(smpl_poses[i][person_i])
+            else:
+                # track_ids_lists[i]가 범위를 벗어난 경우 처리
+                print(f"경고: 인덱스 {i}는 track_ids_lists의 범위를 벗어납니다.")
 
         smpl = {}
+        smpl['full_pose'] = np.array(full_pose_).reshape((-1, 24, 3))
         smpl['body_pose'] = np.array(body_pose_).reshape((-1, 23, 3))
         smpl['global_orient'] = np.array(global_orient_).reshape((-1, 3))
         smpl['betas'] = np.array(smpl_betas_).reshape((-1, 10))
         human_data['smpl'] = smpl
+        human_data['full_pose'] = smpl['full_pose']
         human_data['verts'] = verts_
         human_data['pred_cams'] = pred_cams_
         human_data['bboxes_xyxy'] = bboxes_xyxy_
         human_data['image_path'] = image_path_
         human_data['person_id'] = person_id_
         human_data['frame_id'] = frame_id_
-        human_data.dump(osp.join(args.output, 'inference_result.npz'))
+        human_data.dump(osp.join(args.output, 'inference_result_multi10.npz'))
+        
+#----------------------------------------------------------------------------------------------------------------
+        #human_data_json = {}
+        #human_data_json['body_pose'] = smpl['body_pose']
+        #human_data_json['body_pose'] = smpl['global_orient']
+        #human_data_json['body_pose'] = np.expand_dims(smpl['body_pose'], axis=0)
+        #smpl['full_pose'] = np.array(smpl['full_pose'])
+        #keypoints_3d, mask = convert_kps(np.array(human_data['full_pose']), src='human_data', dst='mediapipe_body')
+        #assert mask.all()==1
 
+        
+        #human_data_json['smpl'] = smpl
+        #human_data_json['mediapipe'] = keypoints_mp
+        #human_data_json['pre_cams'] = pred_cams_
+        #human_data_json['person_id'] = person_id_
+        #human_data_json['frame_id'] = frame_id_
+      
+        
+        class NumpyArrayEncoder(JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                return JSONEncoder.default(self, obj)
+        
+        # with open("test6_multi_videotest5.json", "w") as write_file:
+        #     json.dump(human_data, write_file, cls=NumpyArrayEncoder)
+        # print("finsh to writing")
+#----------------------------------------------------------------------------------------------------------------   
+        body_model_dir = 'data/body_models/smpl'
+        joints_regressor_path = 'data/body_models/J_regressor_extra.npy'
+
+       
+        body_model = \
+            build_body_model(
+                dict(
+                    type='SMPL',
+                    keypoint_src='smpl_45',
+                    keypoint_dst='smpl_45',
+                    gender='neutral',
+                    num_betas=10,
+                    use_pca=False,
+                    model_path=body_model_dir)
+        )
+        
+        result = body_model(
+            global_orient=torch.tensor(smpl['global_orient']).reshape(-1, 1, 3),
+            body_pose=torch.tensor(smpl['body_pose']))#.view(-1, 69)
+        
+        result_pose = {}
+        result_keypoints = result['keypoints'].detach().cpu().numpy()
+        result_pose['keypoints'] = np.array(result_keypoints)
+        #keypoints_3d = result_pose['keypoints']
+        #result_keypoints = result['joints'].detach().cpu().numpy()
+        #result_pose['joints'] = np.array(result_keypoints)
+
+
+        keypoints_3d, mask = convert_kps(result_pose['keypoints'], src='smpl_45', dst='coco')
+        
+#----------------------------------------------------------------------------------------------------------------         
+            #betas=torch.tensor(smpl['betas']))
+        #output = body_model(smpl_poses, return_joints=True) # smpl parameters
+        #keypoints_3d = output['joints']
+#---------------------------------------------------------------------------------------------------------------- 
+        source_index = 0
+        source_person_id = None
+        source_json = 1
+        data = []
+        while source_index < keypoints_3d.shape[0]:
+            
+            if human_data['person_id'][source_index] != source_person_id:
+                entry = {
+                    'id' : human_data['person_id'][source_index],
+                    'keypoints3d' : keypoints_3d[source_index]
+                }
+                data.append(entry)
+                source_person_id = human_data['person_id'][source_index]
+                
+                if human_data['person_id'][source_index] == 2:
+                    with open(f'keypoints3d_2/{source_json}.json', "w") as write_file:
+                        json.dump(data, write_file, cls=NumpyArrayEncoder)
+                    data = []
+                    source_json += 1
+                source_index +=  1
+                
+            elif human_data['person_id'][source_index] == source_person_id:
+                with open(f'keypoints3d_2/{source_json}.json', "w") as write_file:
+                    json.dump(data, write_file, cls=NumpyArrayEncoder)
+                data = []
+                entry = {
+                    'id' : human_data['person_id'][source_index],
+                    'keypoints3d' : keypoints_3d[source_index]
+                }
+                data.append(entry)
+                source_person_id = human_data['person_id'][source_index]
+                source_index +=  1
+                source_json += 1
+
+
+
+
+
+        # class NumpyArrayEncoder(JSONEncoder):
+        #      def default(self, obj):
+        #          if isinstance(obj, np.ndarray):
+        #              return obj.tolist()
+        #          return JSONEncoder.default(self, obj)
+        
+        #with open("test9_multi_keypoints.json", "w") as write_file:
+        #    json.dump(data, write_file, cls=NumpyArrayEncoder)
+        #print("finsh to writing")
     # To compress vertices array
     compressed_verts = np.zeros([frame_num, max_instance, 6890, 3])
     compressed_cams = np.zeros([frame_num, max_instance, 3])
@@ -591,3 +728,5 @@ if __name__ == '__main__':
         assert args.tracking_config is not None
 
     main(args)
+
+
