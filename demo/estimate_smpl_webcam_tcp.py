@@ -105,7 +105,7 @@ def get_tracking_result(args, frames_iter, mesh_model, extractor):
 
 
 
-def multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor):
+def multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor, conn):
     """Estimate smpl parameters from multi-person
         images with mmtracking
     Args:
@@ -258,7 +258,9 @@ def multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor):
         human_data['person_id'] = person_id_
         human_data['frame_id'] = frame_id_
         human_data.dump(osp.join(args.output, 'inference_result_multi10.npz'))
-        
+        serialized_array = pickle.dumps(human_data)
+        # 메시지를 서버로 전송
+        conn.send(serialized_array)
 
     # To compress vertices array
     compressed_verts = np.zeros([frame_num, max_instance, 6890, 3])
@@ -304,9 +306,12 @@ def multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor):
 
 def main(args):
 
+    server_ip = '0.0.0.0'  # 모든 인터페이스에서 접근 가능
+    server_port = 12345  # 사용할 포트 번호
+    buffer_size = 1024  # 데이터 버퍼 크기
     # prepare input
     #frames_iter = prepare_frames(args.input_path)
-    vid_cap = cv2.VideoCapture(0)
+    vid_cap = cv2.VideoCapture("rtsp://172.22.48.1:8554/webcam.h264")
     vid_cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
     if not vid_cap.isOpened():
         print("Failed to open webcam.")
@@ -316,21 +321,36 @@ def main(args):
     mesh_model, extractor = \
         init_model(args.mesh_reg_config, args.mesh_reg_checkpoint,
                    device=args.device.lower())
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((server_ip, server_port))
+    server_socket.listen(1)
+    print(f"서버 {server_ip}:{server_port}에서 대기 중...")
+
+# 클라이언트 연결 대기
+    conn, addr = server_socket.accept()
+    print(f"{addr}에서 연결됨")
     
     while True:
+
+        request = conn.recv(4096)
+        if not request:
+            break  # 클라이언트 연결 종료 시 루프 탈출
+        
+        print("클라이언트 요청 받음")
+        
         ret, frame = vid_cap.read()  
         if ret:
             cv2.imshow("test", frame)
             
-       
+
             # 프레임 처리 코드 추가 가능
         source_index += 1 
         frames_iter = [frame]  
-        img_path = f"demo_result/images/{source_index}.png"
-        cv2.imwrite(img_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
+#        img_path = f"demo_result/images/{source_index}.png"
+#        cv2.imwrite(img_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
 
         if args.multi_person_demo:
-            multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor)
+            multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor, conn)
         else:
             raise ValueError('Only supports single_person_demo or multi_person_demo')
         

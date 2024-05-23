@@ -466,7 +466,7 @@ def multi_person_with_mmtracking(args, frames_iter):
         human_data['image_path'] = image_path_
         human_data['person_id'] = person_id_
         human_data['frame_id'] = frame_id_
-        human_data.dump(osp.join(args.output, 'inference_result_multi10.npz'))
+        human_data.dump(osp.join(args.output, 'inference_result_multi_video5_1.npz'))
         
 #----------------------------------------------------------------------------------------------------------------
         #human_data_json = {}
@@ -530,39 +530,39 @@ def multi_person_with_mmtracking(args, frames_iter):
         #output = body_model(smpl_poses, return_joints=True) # smpl parameters
         #keypoints_3d = output['joints']
 #---------------------------------------------------------------------------------------------------------------- 
-        source_index = 0
-        source_person_id = None
-        source_json = 1
-        data = []
-        while source_index < keypoints_3d.shape[0]:
+        # source_index = 0
+        # source_person_id = None
+        # source_json = 1
+        # data = []
+        # while source_index < keypoints_3d.shape[0]:
             
-            if human_data['person_id'][source_index] != source_person_id:
-                entry = {
-                    'id' : human_data['person_id'][source_index],
-                    'keypoints3d' : keypoints_3d[source_index]
-                }
-                data.append(entry)
-                source_person_id = human_data['person_id'][source_index]
+        #     if human_data['person_id'][source_index] != source_person_id:
+        #         entry = {
+        #             'id' : human_data['person_id'][source_index],
+        #             'keypoints3d' : keypoints_3d[source_index]
+        #         }
+        #         data.append(entry)
+        #         source_person_id = human_data['person_id'][source_index]
                 
-                if human_data['person_id'][source_index] == 2:
-                    with open(f'keypoints3d_2/{source_json}.json', "w") as write_file:
-                        json.dump(data, write_file, cls=NumpyArrayEncoder)
-                    data = []
-                    source_json += 1
-                source_index +=  1
+        #         if human_data['person_id'][source_index] == 2:
+        #             with open(f'keypoints3d_2/{source_json}.json', "w") as write_file:
+        #                 json.dump(data, write_file, cls=NumpyArrayEncoder)
+        #             data = []
+        #             source_json += 1
+        #         source_index +=  1
                 
-            elif human_data['person_id'][source_index] == source_person_id:
-                with open(f'keypoints3d_2/{source_json}.json', "w") as write_file:
-                    json.dump(data, write_file, cls=NumpyArrayEncoder)
-                data = []
-                entry = {
-                    'id' : human_data['person_id'][source_index],
-                    'keypoints3d' : keypoints_3d[source_index]
-                }
-                data.append(entry)
-                source_person_id = human_data['person_id'][source_index]
-                source_index +=  1
-                source_json += 1
+        #     elif human_data['person_id'][source_index] == source_person_id:
+        #         with open(f'keypoints3d_2/{source_json}.json', "w") as write_file:
+        #             json.dump(data, write_file, cls=NumpyArrayEncoder)
+        #         data = []
+        #         entry = {
+        #             'id' : human_data['person_id'][source_index],
+        #             'keypoints3d' : keypoints_3d[source_index]
+        #         }
+        #         data.append(entry)
+        #         source_person_id = human_data['person_id'][source_index]
+        #         source_index +=  1
+        #         source_json += 1
 
 
 

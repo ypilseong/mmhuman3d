@@ -1,19 +1,15 @@
 import os
 import os.path as osp
-import time
-import shutil
 import warnings
 from argparse import ArgumentParser
-from pathlib import Path
 import socket
 import pickle
+import time
 
 import cv2
-import json
 import mmcv
 import numpy as np
 import torch
-from json import JSONEncoder
 
 from mmhuman3d.apis import (
     feature_extract,
@@ -23,7 +19,6 @@ from mmhuman3d.apis import (
 )
 from mmhuman3d.core.visualization.visualize_smpl import visualize_smpl_hmr
 from mmhuman3d.core.conventions.keypoints_mapping import convert_kps
-from mmhuman3d.models.body_models.builder import build_body_model
 from mmhuman3d.data.data_converters.humman import HuMManConverter
 from mmhuman3d.data.data_structures.human_data import HumanData
 from mmhuman3d.utils.demo_utils import (
@@ -54,9 +49,9 @@ except (ImportError, ModuleNotFoundError):
     has_mmtrack = False
 
 
-def get_tracking_result(args, frames_iter, mesh_model, extractor):
-    tracking_model = init_tracking_model(
-        args.tracking_config, None, device=args.device.lower())
+def get_tracking_result(args, frames_iter, mesh_model, extractor, tracking_model):
+    #tracking_model = init_tracking_model(
+    #    args.tracking_config, None, device=args.device.lower())
 
     max_track_id = 0
     max_instance = 0
@@ -106,22 +101,19 @@ def get_tracking_result(args, frames_iter, mesh_model, extractor):
 
 
 
-def multi_person_with_mmtracking(args, frames_iter):
+def multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor, source_index, tracking_model):
     """Estimate smpl parameters from multi-person
         images with mmtracking
     Args:
         args (object):  object of argparse.Namespace.
         frames_iter (np.ndarray,): prepared frames
     """
-    mesh_model, extractor = \
-        init_model(args.mesh_reg_config, args.mesh_reg_checkpoint,
-                   device=args.device.lower())
-
-    start = time.time()
+    #mesh_model, extractor = \
+    #    init_model(args.mesh_reg_config, args.mesh_reg_checkpoint,
+    #               device=args.device.lower())
 
     max_track_id, max_instance, frame_id_list, result_list = \
-        get_tracking_result(args, frames_iter, mesh_model, extractor)
-
+        get_tracking_result(args, frames_iter, mesh_model, extractor, tracking_model)
 
     frame_num = len(frame_id_list)
     verts = np.zeros([frame_num, max_track_id + 1, 6890, 3])
@@ -240,8 +232,6 @@ def multi_person_with_mmtracking(args, frames_iter):
                     smpl_betas_.append(smpl_betas[i][person_i])
                     verts_.append(verts[i][person_i])
                     pred_cams_.append(pred_cams[i][person_i])
-                    bboxes_xyxy_.append(bboxes_xyxy[i][person_i])
-                    image_path_.append(os.path.join('images', img_i))
                     person_id_.append(person_i)
                     frame_id_.append(frame_id_list[i])
                     
@@ -255,68 +245,67 @@ def multi_person_with_mmtracking(args, frames_iter):
         smpl['global_orient'] = np.array(global_orient_).reshape((-1, 3))
         smpl['betas'] = np.array(smpl_betas_).reshape((-1, 10))
         human_data['smpl'] = smpl
-        #human_data['verts'] = verts_
+        human_data['verts'] = verts_
         human_data['pred_cams'] = pred_cams_
-        #human_data['bboxes_xyxy'] = bboxes_xyxy_
-        #human_data['image_path'] = image_path_
         human_data['person_id'] = person_id_
-        #human_data['frame_id'] = frame_id_
-        human_data.dump(osp.join(args.output, 'inference_result_multi_video5_2.npz'))
-        end = time.time()
-        print(end - start)        
+        human_data['frame_id'] = frame_id_
+        human_data.dump(osp.join(args.output, f'inference_result_multi{source_index}.npz'))
+        
 
-    # To compress vertices array
-    compressed_verts = np.zeros([frame_num, max_instance, 6890, 3])
-    compressed_cams = np.zeros([frame_num, max_instance, 3])
-    compressed_bboxs = np.zeros([frame_num, max_instance, 5])
-    compressed_poses = np.zeros([frame_num, max_instance, 24, 3])
-    compressed_betas = np.zeros([frame_num, max_instance, 10])
-
-    for i, track_ids_list in enumerate(track_ids_lists):
-        instance_num = len(track_ids_list)
-        compressed_verts[i, :instance_num] = verts[i, track_ids_list]
-        compressed_cams[i, :instance_num] = pred_cams[i, track_ids_list]
-        compressed_bboxs[i, :instance_num] = bboxes_xyxy[i, track_ids_list]
-        compressed_poses[i, :instance_num] = smpl_poses[i, track_ids_list]
-        compressed_betas[i, :instance_num] = smpl_betas[i, track_ids_list]
-
-    assert len(frame_id_list) > 0
-
-    if args.show_path is not None:
-        if args.output is not None:
-            frames_folder = os.path.join(args.output, 'images')
-        else:
-            frames_folder = osp.join(Path(args.show_path).parent, 'images')
-            os.makedirs(frames_folder, exist_ok=True)
-            array_to_images(
-                np.array(frames_iter)[frame_id_list],
-                output_folder=frames_folder)
-        body_model_config = dict(model_path=args.body_model_dir, type='smpl')
-        visualize_smpl_hmr(
-            poses=compressed_poses.reshape(-1, max_instance, 24 * 3),
-            betas=compressed_betas,
-            cam_transl=compressed_cams,
-            bbox=compressed_bboxs,
-            output_path=args.show_path,
-            render_choice=args.render_choice,
-            resolution=frames_iter[0].shape[:2],
-            origin_frames=frames_folder,
-            body_model_config=body_model_config,
-            overwrite=True,
-            palette=args.palette,
-            read_frames_batch=True)
-
+    
+    
 
 def main(args):
 
-    frames_iter = prepare_frames(args.input_path)
-
+    # prepare input
+    #frames_iter = prepare_frames(args.input_path)
+    vid_cap = cv2.VideoCapture("rtsp://172.22.48.1:8554/webcam.h264")
+    vid_cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
     
-    if args.multi_person_demo:
-        multi_person_with_mmtracking(args, frames_iter)
-    else:
-        raise ValueError(
-            'Only supports single_person_demo or multi_person_demo')
+    if not vid_cap.isOpened():
+        print("Failed to open webcam.")
+        return
+    
+    source_index = 1
+    # model load
+    mesh_model, extractor = \
+        init_model(args.mesh_reg_config, args.mesh_reg_checkpoint,
+                   device=args.device.lower())
+    
+    tracking_model = init_tracking_model(
+        args.tracking_config, None, device=args.device.lower())
+    frames_iter = []
+    start_time = time.time()
+    while True:
+        #frame args.fps만큼 모으기
+        frames_iter=[]
+        for _ in range(args.fps):
+            ret, frame = vid_cap.read()
+            frames_iter.append(frame)
+            if ret:
+                cv2.imshow("test", frame)
+
+
+            # 프레임 처리 코드 추가 가능
+        source_index += 1
+
+        # img_path = f"demo_result/images/{source_index}.png"
+        # cv2.imwrite(img_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
+
+        if args.multi_person_demo:
+            multi_person_with_mmtracking(args, frames_iter, mesh_model, extractor, source_index, tracking_model)
+        else:
+            raise ValueError('Only supports single_person_demo or multi_person_demo')
+        
+        end_time = time.time()
+        print(end_time - start_time)
+
+        start_time = end_time
+        # 'q' 키를 누르면 종료
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    vid_cap.release()
+    cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
@@ -400,8 +389,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--device',
         choices=['cpu', 'cuda'],
-        default='cuda',
+        default='cuda:0',
         help='device used for testing')
+    parser.add_argument(
+        '--fps',
+        type=int,
+        default=10,
+        help='Set fps'
+    )
     args = parser.parse_args()
 
     if args.single_person_demo:
