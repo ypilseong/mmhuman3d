@@ -38,19 +38,18 @@ def parse_args():
     parser.add_argument(
         '--mesh_reg_config',
         type=str,
-        default='configs/pare/hrnet_w32_conv_pare_coco.py',
+        default='/home/chuaie/OpenMMlab/mmhuman3D/mmhuman3d/configs/pare/hrnet_w32_conv_pare_coco.py',
         help='Config file for mesh regression')
     parser.add_argument(
         '--mesh_reg_checkpoint',
         type=str,
-        default='data/checkpoints/hrnet_w32_conv_pare_mosh.pth',
+        default='/home/chuaie/OpenMMlab/mmhuman3D/mmhuman3d/data/checkpoints/hrnet_w32_conv_pare_mosh.pth',
         help='Checkpoint file for mesh regression')
     parser.add_argument('--cam-id', type=str, default='0')
     parser.add_argument(
         '--det_config',
         type=str,
-        default='demo/mmdetection_cfg/'
-        'ssdlite_mobilenetv2_scratch_600e_coco.py',
+        default='/home/chuaie/OpenMMlab/mmhuman3D/mmhuman3d/demo/mmdetection_cfg/ssdlite_mobilenetv2_scratch_600e_coco.py',
         help='Config file for detection')
     parser.add_argument(
         '--det_checkpoint',
@@ -70,7 +69,7 @@ def parse_args():
     parser.add_argument(
         '--body_model_dir',
         type=str,
-        default='data/body_models/smpl',
+        default='/home/chuaie/OpenMMlab/mmhuman3D/mmhuman3d/data/body_models/smpl',
         help='Body models file path')
     parser.add_argument(
         '--bbox_thr',
@@ -125,10 +124,11 @@ def parse_args():
 def read_camera():
     # init video reader
     print('Thread "input" started')
-    cam_id = args.cam_id
+    cam_id = "rtsp://172.22.48.1:8554/webcam.h264"
     if cam_id.isdigit():
         cam_id = int(cam_id)
     vid_cap = cv2.VideoCapture(cam_id)
+    vid_cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
     if not vid_cap.isOpened():
         print(f'Cannot open camera (ID={cam_id})')
         exit()
@@ -337,10 +337,14 @@ def main():
     assert args.det_config is not None
     assert args.det_checkpoint is not None
 
-    cam_id = args.cam_id
+    # vid_cap = cv2.VideoCapture("rtsp://172.22.48.1:8554/webcam.h264")
+    
+    
+    cam_id = "rtsp://172.22.48.1:8554/webcam.h264"
     if cam_id.isdigit():
         cam_id = int(cam_id)
     vid_cap = cv2.VideoCapture(cam_id)
+    vid_cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
     if not vid_cap.isOpened():
         print(f'Cannot open camera (ID={cam_id})')
         exit()
